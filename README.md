@@ -40,7 +40,7 @@ GitHub Pages 支持由自定义 Actions 构建并上传静态产物：[官方说
 python3 -m unittest discover -s 测试
 ```
 
-公开构建目前应被拦截：
+两篇正文已获准公开，目标仓库已确认。导出获准副本后可运行公开构建；未授权、版本不符或仓库不符仍会被拦截：
 
 ```bash
 python3 脚本/构建.py public
