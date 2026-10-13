@@ -3,16 +3,16 @@
   "repository": "ChrisFang1999/aiinfra-notes",
   "approved": {
     "training-error-sop": {
-      "source_sha256": "fbbc90e596d320b8152948375f9a5bc31eccce60addebb3808296043bc6972e9",
+      "source_sha256": "657571084b38f141b10bf92e2a31b118bb38c3ad4b75de07b03df8369619294e",
       "body_sha256": "82aa4a3360fc0cc9842e64bf052a0cbb5754238bef20b961ab4f2725a2048c2a"
     },
     "training-error-explanation": {
-      "source_sha256": "1ca1ec10df299573d31636603201e6fc74347bee69554c37659b199e10a767e7",
+      "source_sha256": "f738aa35c0d5624cb804e9207606fd1a022456d78125f07b87b88ca459ac77a9",
       "body_sha256": "859d0b8e4c4200d1ef3367a16b33539a800a8fe37164cb0b990ba59aea6b55bd"
     },
     "training-hang-communication": {
-      "source_sha256": "9b61b830546d1e4aa3f680262245c10c7e420e2f31595fad4fdc8de185b20a01",
-      "body_sha256": "e8322aa34f5e6f310f17e82fea5f5a5a62d0a039075e1c49416cf0090b129c95"
+      "source_sha256": "57456ed92524bde7e29924f5e3b7fa216fb366bde58b58f4ff123a8b75b485cc",
+      "body_sha256": "aa03030da632f3c8ca86f36f5853eb4199adfa64d1e0b4b9017d264a2bd28470"
     }
   },
   "approved_assets": {
