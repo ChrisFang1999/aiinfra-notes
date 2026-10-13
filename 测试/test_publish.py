@@ -29,4 +29,13 @@ class PublicationTests(unittest.TestCase):
         rendered,_=blog.render('<script>alert(1)</script>\n\n```python\nprint("hello")\n```')
         self.assertNotIn('<script>',rendered);self.assertIn('&lt;script&gt;',rendered)
         self.assertIn('language-python',rendered);self.assertIn('hello',rendered)
+    def test_search_only_indexes_allowlisted_adapted_bodies(self):
+        pages={ident:{'title':'公开教程', 'body':blog.adapt('[学习记录](学习记录与待补充.md)\n- [工作总结中的诊断能力](../internal.md)\n## GPU Hang\n每 30 秒采样。')} for ident,_,_ in blog.DOCS}
+        pages['private-note']={'title':'私有笔记','body':'PRIVATE_SENTINEL'}
+        index=blog.search_index(pages)
+        self.assertEqual(len(index),2)
+        text=str(index)
+        self.assertIn('每 30 秒采样',text)
+        for excluded in ['PRIVATE_SENTINEL','internal.md','学习记录与待补充.md']:
+            self.assertNotIn(excluded,text)
 if __name__=='__main__':unittest.main()
