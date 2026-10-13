@@ -11,8 +11,24 @@ from pygments.formatters import HtmlFormatter
 ROOT = Path(__file__).resolve().parents[1]
 TOPIC = Path('知识体系/稳定性与排障/训练报错排查')
 DOCS = [('training-error-sop', '训练报错排查SOP.md', '快速 SOP'),
-        ('training-error-explanation', '训练报错排查详细解释.md', '深入解释')]
+        ('training-error-explanation', '训练报错排查详细解释.md', '深入解释'),
+        ('training-hang-communication', '训练卡住排查：通信等待型GPU_Hang.md', 'GPU Hang 专题')]
 EXTERNAL = {'pytorch.org', 'docs.nvidia.com', 'kubernetes.io'}
+EXTERNAL_URLS = {
+    'https://github.com/NVIDIA/nccl/blob/master/src/device/prims_simple.h',
+    'https://github.com/NVIDIA/nccl/blob/master/src/misc/socket.cc',
+    'https://github.com/NVIDIA/nccl/issues/947',
+}
+SUMMARIES = {
+    'training-error-sop': '多机日志、GPU 状态、平台事件与跨 rank 堆栈的初步排查入口。',
+    'training-error-explanation': '理解判断依据、自动检测顺序、网卡计数器及经验与证据的边界。',
+    'training-hang-communication': '从通信等待机制出发，串联 GPU Hang 的排查流程、原因分支与恢复验证。',
+}
+
+def allowed_external(url):
+    parsed = urlsplit(url)
+    return parsed.scheme == 'https' and (parsed.hostname in EXTERNAL or url in EXTERNAL_URLS)
+
 
 def digest(text):
     return hashlib.sha256(text.encode()).hexdigest()
@@ -40,7 +56,7 @@ def adapt(body):
         if dest == '../../../README.md': return f'[{label}](index.html)'
         if dest == '学习记录与待补充.md': return f'{label}（未公开）'
         url = urlsplit(dest)
-        if url.scheme == 'https' and url.hostname in EXTERNAL:
+        if allowed_external(dest):
             return match.group(0)
         raise ValueError('存在未审核的链接目标；请先审查适配规则')
     body = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', link, body)
@@ -71,7 +87,7 @@ def render(body):
                     href = child.attrGet('href') or ''
                     allowed = {'index.html'} | {x[0]+'.html' for x in DOCS}
                     u = urlsplit(href)
-                    if not (href in allowed or href.startswith('#') or (u.scheme == 'https' and u.hostname in EXTERNAL)):
+                    if not (href in allowed or href.startswith('#') or allowed_external(href)):
                         raise ValueError('渲染层发现未经审核的链接')
     return md.renderer.render(tokens, md.options, {}), toc
 
@@ -108,12 +124,11 @@ def build(pages, output, preview):
         data = pages[ident]
         markup,toc = render(data['body'])
         intro = f'<div class="article-meta">稳定性与排障 <span> / {kind} · 更新 {html.escape(data["updated"])}</span></div>'
-        other = next(x for x in DOCS if x[0] != ident)
-        end = f'<a class="next" href="{other[0]}.html"><small>继续阅读</small><strong>{other[2]} →</strong></a>'
+        end = '<div class="related">' + ''.join(f'<a class="next" href="{other[0]}.html"><small>继续阅读</small><strong>{other[2]} →</strong></a>' for other in DOCS if other[0] != ident) + '</div>'
         mobile_toc = '<details class=mobile-toc><summary>本页目录</summary>' + ''.join(f'<a href="#{a}">{html.escape(t)}</a>' for a,t,_ in toc) + '</details>'
         rendered[ident+'.html'] = shell(data['title'], intro+mobile_toc+'<article>'+markup+'</article>'+end, ident, toc, preview)
-        cards.append(f'<a class="card" href="{ident}.html"><span class="tag">{kind}</span><h3>{html.escape(data["title"])}</h3><p>{"多机日志、GPU 状态、平台事件与跨 rank 堆栈的初步排查入口。" if kind == "快速 SOP" else "理解判断依据、GPU Hang 检测顺序，以及经验与证据的边界。"}</p><span class="card-end">开始阅读 <b>↗</b></span></a>')
-    home = '<section class="hero"><p class="eyebrow">AI INFRA / FIELD NOTES</p><h1>把问题拆开，<br>把系统看清。</h1><p class="lead">围绕真实工程问题，整理 AI 基础设施的排查路径、判断依据与实践边界。</p><a class="primary" href="training-error-sop.html">从训练报错排查开始 →</a><div class="hero-stats"><span><b>01</b> 已有专题</span><span><b>02</b> 阅读入口</span><span>从快速操作到机制理解</span></div></section><section id="topics"><p class="eyebrow">当前专题</p><h2>稳定性与排障</h2><p class="muted">先找到调查入口，再沿证据深入。</p><div class="cards">'+''.join(cards)+'</div></section><section class="direction"><p class="eyebrow">学习方向</p><h2>按问题生长的知识体系</h2><p>稳定性与排障、可观测性与软硬件监控是独立的重点方向。其余主题随实际内容逐步建立。</p><div class="chips">'+''.join('<span>'+x+'</span>' for x in ['可观测性与软硬件监控','计算与系统基础','模型计算与执行','训练系统与效率','推理系统','数据与存储','平台与工程'])+'</div></section>'
+        cards.append(f'<a class="card" href="{ident}.html"><span class="tag">{kind}</span><h3>{html.escape(data["title"])}</h3><p>{SUMMARIES[ident]}</p><span class="card-end">开始阅读 <b>↗</b></span></a>')
+    home = '<section class="hero"><p class="eyebrow">AI INFRA / FIELD NOTES</p><h1>把问题拆开，<br>把系统看清。</h1><p class="lead">围绕真实工程问题，整理 AI 基础设施的排查路径、判断依据与实践边界。</p><a class="primary" href="training-error-sop.html">从训练报错排查开始 →</a><div class="hero-stats"><span><b>01</b> 已有专题</span><span><b>03</b> 阅读入口</span><span>从快速操作到机制理解</span></div></section><section id="topics"><p class="eyebrow">当前专题</p><h2>稳定性与排障</h2><p class="muted">先找到调查入口，再沿证据深入。</p><div class="cards">'+''.join(cards)+'</div></section><section class="direction"><p class="eyebrow">学习方向</p><h2>按问题生长的知识体系</h2><p>稳定性与排障、可观测性与软硬件监控是独立的重点方向。其余主题随实际内容逐步建立。</p><div class="chips">'+''.join('<span>'+x+'</span>' for x in ['可观测性与软硬件监控','计算与系统基础','模型计算与执行','训练系统与效率','推理系统','数据与存储','平台与工程'])+'</div></section>'
     rendered['index.html'] = shell('首页',home,preview=preview)
     rendered['404.html'] = shell('页面不存在','<h1>这篇内容尚未到来。</h1><p>请通过顶部导航返回首页。</p>',preview=preview)
     if output.exists(): shutil.rmtree(output)
