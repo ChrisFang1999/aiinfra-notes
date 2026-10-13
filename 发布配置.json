@@ -3,16 +3,20 @@
   "repository": "ChrisFang1999/aiinfra-notes",
   "approved": {
     "training-error-sop": {
-      "source_sha256": "6788546896887f0f1764f62946129f3efb89d0ff871e0682b565e584e36690bf",
-      "body_sha256": "fda9a67ce2714e7a6fb9745fe3cfc0ea8f8147d48c47554982ab1ce48abb4241"
+      "source_sha256": "fbbc90e596d320b8152948375f9a5bc31eccce60addebb3808296043bc6972e9",
+      "body_sha256": "82aa4a3360fc0cc9842e64bf052a0cbb5754238bef20b961ab4f2725a2048c2a"
     },
     "training-error-explanation": {
-      "source_sha256": "43826ca227b126343a7ea25875da70abcb28d42e7d83c4f75a6150ecf116c854",
-      "body_sha256": "19640145b217f98b8db6026af75e226741b9225fb1dd9924b6d0f58e1ee320b9"
+      "source_sha256": "1ca1ec10df299573d31636603201e6fc74347bee69554c37659b199e10a767e7",
+      "body_sha256": "859d0b8e4c4200d1ef3367a16b33539a800a8fe37164cb0b990ba59aea6b55bd"
     },
     "training-hang-communication": {
-      "source_sha256": "9b076e62ffce76d1d277bdbf1a626406eb4b9a5e915e20ef007ed7e445e3798e",
-      "body_sha256": "0357f79d187c2e717d87e75b149dbf9512918a2a913647e963e79db7dc2dbdb6"
+      "source_sha256": "9b61b830546d1e4aa3f680262245c10c7e420e2f31595fad4fdc8de185b20a01",
+      "body_sha256": "e8322aa34f5e6f310f17e82fea5f5a5a62d0a039075e1c49416cf0090b129c95"
     }
+  },
+  "approved_assets": {
+    "GPU通信等待利用率原理示意图.png": "85d8fc370441567fd7b2d3dd474d20a19557897b78d38bb7294f47388321a933",
+    "GPU利用率与SM活跃率统计原理示意图.png": "386cbd9a4ea1a6a0aecd53d47537f88b9810e6dac20e92eb1e2d158357d8e02c"
   }
 }

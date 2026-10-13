@@ -10,6 +10,7 @@ from pygments.formatters import HtmlFormatter
 
 ROOT = Path(__file__).resolve().parents[1]
 TOPIC = Path('知识体系/稳定性与排障/训练报错排查')
+IMAGES = ('GPU通信等待利用率原理示意图.png', 'GPU利用率与SM活跃率统计原理示意图.png')
 DOCS = [('training-error-sop', '训练报错排查SOP.md', '快速 SOP'),
         ('training-error-explanation', '训练报错排查详细解释.md', '深入解释'),
         ('training-hang-communication', '训练卡住排查：通信等待型GPU_Hang.md', 'GPU Hang 专题')]
@@ -53,6 +54,7 @@ def adapt(body):
         label, dest = match.groups()
         dest = unquote(dest)
         if dest in names: return f'[{label}]({names[dest]})'
+        if dest.startswith('配图/') and dest.removeprefix('配图/') in IMAGES: return match.group(0)
         if dest == '../../../README.md': return f'[{label}](index.html)'
         if dest == '学习记录与待补充.md': return f'{label}（未公开）'
         url = urlsplit(dest)
@@ -69,9 +71,71 @@ def code_highlight(code, lang, attrs):
     except Exception: lexer = TextLexer()
     return highlight(code, lexer, HtmlFormatter(nowrap=True))
 
+def mermaid_svg(code):
+    # Supported source grammar is deliberately narrow; new syntax fails closed.
+    lines = [line.strip() for line in code.strip().splitlines() if line.strip()]
+    if not lines or lines.pop(0) != 'flowchart TD':
+        raise ValueError('仅支持当前自上而下的 Mermaid 流程图')
+    nodes, edges = {}, []
+    definition = re.compile(r'([A-Z])([\[{])"([^"\n]+)"([\]}])')
+    for line in lines:
+        standalone = definition.fullmatch(line)
+        if standalone:
+            ident, opener, title, closer = standalone.groups()
+            if (opener, closer) not in [('{','}'),('[',']')]: raise ValueError('节点括号不匹配')
+            nodes[ident] = (title.split('<br/>'), opener == '{')
+            continue
+        parts = re.split(r'\s+--\s+(.+?)\s+-->\s+', line, maxsplit=1)
+        if len(parts) != 3:
+            raise ValueError('流程图出现未支持的 Mermaid 语法')
+        left, label, right = parts
+        found = []
+        for part in (left, right):
+            match = definition.fullmatch(part)
+            if match:
+                ident, opener, title, closer = match.groups()
+                if (opener, closer) not in [('{','}'),('[',']')]: raise ValueError('节点括号不匹配')
+                info = (title.split('<br/>'), opener == '{')
+                if ident in nodes and nodes[ident] != info: raise ValueError('节点定义冲突')
+                nodes[ident] = info; found.append(ident)
+            elif re.fullmatch(r'[A-Z]', part) and part in nodes: found.append(part)
+            else: raise ValueError('流程图出现未定义节点')
+        edges.append((found[0], found[1], label))
+    if set(nodes) != set('ABCDEFG') or len(edges) != 6 or set((a,b) for a,b,_ in edges) != {('A','B'),('A','C'),('C','D'),('C','E'),('E','F'),('E','G')}:
+        raise ValueError('流程图结构变化，需要更新图形布局')
+    centers = {'A':(390,85),'B':(635,85),'C':(390,230),'D':(635,375),'E':(390,375),'F':(150,520),'G':(635,520)}
+    result = ['<figure class="flowchart"><svg viewBox="0 0 790 610" role="img" aria-labelledby="flow-title flow-desc" xmlns="http://www.w3.org/2000/svg"><title id="flow-title">训练报错排障流程图</title><desc id="flow-desc">先查多机日志，再查平台与硬件，最后按 GPU Hang 迹象分流；所有分支保留堆栈与日志调查入口。</desc><defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0L9 4.5L0 9Z" fill="#527a65"/></marker></defs>']
+    routes = {('A','B'):'M510 85 L530 85',('A','C'):'M390 135 L390 180',('C','D'):'M510 230 L635 230 L635 335',('C','E'):'M390 280 L390 325',('E','F'):'M270 375 L150 375 L150 480',('E','G'):'M510 375 L635 375 L635 480'}
+    labels = {('A','B'):(558,76),('A','C'):(403,163),('C','D'):(558,222),('C','E'):(403,308),('E','F'):(178,365),('E','G'):(558,365)}
+    for a,b,label in edges:
+        x,y=labels[(a,b)]
+        result.append(f'<path class="flow-edge" d="{routes[(a,b)]}" marker-end="url(#arrow)"/><text class="flow-label" x="{x}" y="{y}">{html.escape(label)}</text>')
+    for ident,(title,decision) in nodes.items():
+        x,y=centers[ident]
+        if decision: result.append(f'<path class="flow-decision" d="M{x} {y-50} L{x+120} {y} L{x} {y+50} L{x-120} {y}Z"/>')
+        else: result.append(f'<rect class="flow-action" x="{x-105}" y="{y-40}" width="210" height="80" rx="11"/>')
+        result.append(f'<text class="flow-node" x="{x}" y="{y-9 if len(title)>1 else y+5}">')
+        for j,part in enumerate(title): result.append(f'<tspan x="{x}" dy="{j*0+20 if j else 0}">{html.escape(part)}</tspan>')
+        result.append('</text>')
+    result.append('</svg><p class="mobile-hint">左右滑动查看完整流程图</p><figcaption>训练报错初步排查路径。发现线索后进入对应诊断；证据不足时继续补充日志和堆栈。</figcaption></figure>')
+    return ''.join(result)
+
+def image_hashes(directory):
+    result = {}
+    for name in IMAGES:
+        path = directory / '配图' / name
+        if not path.is_file() or path.stat().st_size > 5_000_000 or path.read_bytes()[:8] != b'\x89PNG\r\n\x1a\n':
+            raise ValueError('缺少获准 PNG 或图片格式不符')
+        result[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return result
+
 def render(body):
     md = MarkdownIt('commonmark', {'html':False, 'highlight':code_highlight}).enable('table')
     tokens = md.parse(body)
+    for token in tokens:
+        if token.type == 'fence' and token.info.strip() == 'mermaid':
+            token.type = 'html_block'
+            token.content = mermaid_svg(token.content)
     toc = []
     n = 0
     for i, token in enumerate(tokens):
@@ -82,7 +146,7 @@ def render(body):
             if token.tag != 'h1': toc.append((anchor, tokens[i+1].content, token.tag))
         if token.type == 'inline':
             for child in token.children or []:
-                if child.type == 'image': raise ValueError('图片尚未经过公开审查')
+                if child.type == 'image' and unquote(child.attrGet('src') or '') not in {'配图/' + x for x in IMAGES}: raise ValueError('图片尚未经过公开审查')
                 if child.type == 'link_open':
                     href = child.attrGet('href') or ''
                     allowed = {'index.html'} | {x[0]+'.html' for x in DOCS}
@@ -115,7 +179,7 @@ def shell(title, content, active='', toc=None, preview=False):
     notice = '<div class="preview">本地预览 · 非线上发布版本</div>' if preview else ''
     return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="{'noindex,nofollow' if preview else 'index,follow'}"><title>{html.escape(title)} · AI Infra 手记</title><link rel="stylesheet" href="assets/阅读.css"><script src="assets/搜索索引.js" defer></script><script src="assets/阅读.js" defer></script></head><body>{notice}<a class="skip" href="#main">跳至正文</a><header><a class="brand" href="index.html"><b>AI<span>/</span>Infra</b><small>工程实践手记</small></a><div class="header-tools"><button class="search-open" type="button" aria-haspopup="dialog">搜索 <kbd>/</kbd></button><a href="index.html#topics">知识导航 ↗</a></div></header><dialog id="search-dialog" aria-labelledby="search-title"><div class="search-top"><h2 id="search-title">搜索文章</h2><button class="search-close" type="button" aria-label="关闭搜索">关闭 ×</button></div><label for="search-input">输入关键词，查找标题与正文</label><input id="search-input" type="search" placeholder="如：GPU Hang、堆栈、采样" autocomplete="off"><p id="search-status" role="status" aria-live="polite">输入关键词开始搜索</p><ul id="search-results"></ul></dialog><div class="layout"><nav class="sidebar" aria-label="专题导航"><p class="eyebrow">知识体系 / 01</p><a class="category" href="index.html#topics">稳定性与排障</a><p class="nav-title">训练报错排查</p>{nav}<div class="side-note">从现象出发，沿证据定位。<br>保留经验的适用边界。</div></nav><main id="main">{content}</main><aside class="toc"><p class="eyebrow">本页目录</p>{aside}<a class="backtop" href="#main">回到顶部 ↑</a></aside></div><footer>AI Infra 手记 <span>持续学习 · 审慎验证 · 逐步沉淀</span></footer></body></html>'''
 
-def build(pages, output, preview):
+def build(pages, output, preview, images):
     # Render everything before replacing output: a validation failure preserves the last preview.
     index = search_index(pages)
     rendered = {}
@@ -135,6 +199,8 @@ def build(pages, output, preview):
     output.mkdir(parents=True)
     for name,content in rendered.items(): (output/name).write_text(content)
     shutil.copytree(ROOT/'界面',output/'assets')
+    (output/'配图').mkdir()
+    for name in IMAGES: shutil.copy2(images/'配图'/name, output/'配图'/name)
     (output/'assets/搜索索引.js').write_text('window.blogSearchIndex = ' + json.dumps(index, ensure_ascii=False).replace('<', '\\u003c') + ';\n')
     with (output/'assets/阅读.css').open('a') as f: f.write(HtmlFormatter().get_style_defs('pre'))
     (output/'.nojekyll').touch()
@@ -169,7 +235,7 @@ def main():
         if not args.source: p.error('请使用 --source 指定正式知识库路径')
         pages=source_pages(Path(args.source))
         if args.mode == 'preview':
-            build(pages,ROOT/'本地预览',True)
+            build(pages,ROOT/'本地预览',True,Path(args.source)/TOPIC)
             report={ident:{'source_sha256':d['source_sha256'],'body_sha256':digest(d['body']),'status':d['status'],'visibility':d['visibility']} for ident,d in pages.items()}
             (ROOT/'本地记录').mkdir(exist_ok=True)
             (ROOT/'本地记录/版本核对.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
@@ -177,9 +243,13 @@ def main():
             return
         check_approval(config,pages)
         for data in pages.values(): render(data['body'])
+        asset_dir = Path(args.source)/TOPIC
+        if image_hashes(asset_dir) != config.get('approved_assets'): raise ValueError('图片版本与批准记录不符')
         out=ROOT/'发布内容'
         out.mkdir(exist_ok=True)
         for ident,data in pages.items(): (out/(ident+'.json')).write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
+        (out/'配图').mkdir(exist_ok=True)
+        for name in IMAGES: shutil.copy2(asset_dir/'配图'/name, out/'配图'/name)
         print('已生成获准版本副本；未推送、未部署。')
     else:
         if not config.get('enabled'): raise ValueError('尚未批准公开内容及目标仓库')
@@ -187,7 +257,8 @@ def main():
         check_approval(config,pages)
         repo=os.environ.get('GITHUB_REPOSITORY')
         if repo and repo != config['repository']: raise ValueError('当前仓库与批准目标不符')
-        build(pages,ROOT/'发布站点',False)
+        if image_hashes(ROOT/'发布内容') != config.get('approved_assets'): raise ValueError('发布图片与批准版本不符')
+        build(pages,ROOT/'发布站点',False,ROOT/'发布内容')
         print('公开静态站点已生成。')
 
 if __name__=='__main__': main()

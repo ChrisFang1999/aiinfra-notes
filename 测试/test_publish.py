@@ -29,6 +29,21 @@ class PublicationTests(unittest.TestCase):
         rendered,_=blog.render('<script>alert(1)</script>\n\n```python\nprint("hello")\n```')
         self.assertNotIn('<script>',rendered);self.assertIn('&lt;script&gt;',rendered)
         self.assertIn('language-python',rendered);self.assertIn('hello',rendered)
+    def test_mermaid_is_a_diagram_and_unknown_syntax_fails(self):
+        diagram="""flowchart TD
+A{"日志？"}
+A -- 有 --> B["看日志"]
+A -- 无 --> C{"平台？"}
+C -- 有 --> D["看平台"]
+C -- 无 --> E{"Hang？"}
+E -- 有 --> F["查堆栈"]
+E -- 无 --> G["查其他"]
+"""
+        output,_=blog.render('```mermaid\n'+diagram+'```\n')
+        self.assertIn('<svg ',output)
+        self.assertIn('日志？',output)
+        self.assertNotIn('<pre',output)
+        with self.assertRaises(ValueError):blog.mermaid_svg('flowchart LR\nA-->B')
     def test_search_only_indexes_allowlisted_adapted_bodies(self):
         pages={ident:{'title':'公开教程', 'body':blog.adapt('[学习记录](学习记录与待补充.md)\n- [工作总结中的诊断能力](../internal.md)\n## GPU Hang\n每 30 秒采样。')} for ident,_,_ in blog.DOCS}
         pages['private-note']={'title':'私有笔记','body':'PRIVATE_SENTINEL'}
