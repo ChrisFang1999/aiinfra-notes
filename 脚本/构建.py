@@ -1,5 +1,5 @@
 """正文唯一来源为知识库；输出均由明确白名单生成。"""
-import argparse, hashlib, html, json, os, re, shutil
+import argparse, hashlib, html, json, os, re, shutil, posixpath
 from pathlib import Path
 from html.parser import HTMLParser
 from urllib.parse import unquote, urlsplit
@@ -10,20 +10,27 @@ from pygments.formatters import HtmlFormatter
 
 ROOT = Path(__file__).resolve().parents[1]
 TOPIC = Path('知识体系/稳定性与排障/训练报错排查')
+SLOW_TOPIC = Path('知识体系/稳定性与排障/训练慢与变慢排查')
 IMAGES = ('GPU通信等待利用率原理示意图.png', 'GPU利用率与SM活跃率统计原理示意图.png')
 DOCS = [('training-error-sop', '训练报错排查SOP.md', '快速 SOP'),
         ('training-error-explanation', '训练报错排查详细解释.md', '深入解释'),
-        ('training-hang-communication', '训练卡住排查：通信等待型GPU_Hang.md', 'GPU Hang 专题')]
-EXTERNAL = {'pytorch.org', 'docs.nvidia.com', 'kubernetes.io'}
+        ('training-hang-communication', '训练卡住排查：通信等待型GPU_Hang.md', 'GPU Hang 专题'),
+        ('training-slow-sop', '训练慢与变慢排查SOP.md', '训练慢 SOP'),
+        ('training-slow-explanation', '训练慢与变慢排查详细解释.md', '训练慢详解')]
+DOC_PATHS = {ident: (SLOW_TOPIC if ident.startswith('training-slow-') else TOPIC) / name for ident,name,_ in DOCS}
+EXTERNAL = {'pytorch.org', 'docs.pytorch.org', 'docs.nvidia.com', 'kubernetes.io', 'numpy.org', 'deepspeed.readthedocs.io'}
 EXTERNAL_URLS = {
     'https://github.com/NVIDIA/nccl/blob/master/src/device/prims_simple.h',
     'https://github.com/NVIDIA/nccl/blob/master/src/misc/socket.cc',
     'https://github.com/NVIDIA/nccl/issues/947',
+    'https://github.com/facebookresearch/HolisticTraceAnalysis',
 }
 SUMMARIES = {
     'training-error-sop': '多机日志、GPU 状态、平台事件与跨 rank 堆栈的初步排查入口。',
     'training-error-explanation': '理解判断依据、自动检测顺序、网卡计数器及经验与证据的边界。',
     'training-hang-communication': '从通信等待机制出发，串联 GPU Hang 的排查流程、原因分支与恢复验证。',
+    'training-slow-sop': '以 step time 和跨 rank 差异为入口，快速定位数据、CPU、GPU 与通信问题。',
+    'training-slow-explanation': '展开基准比较、数据等待、Profile 时间线及验证边界。',
 }
 
 def allowed_external(url):
@@ -45,22 +52,25 @@ def parse(raw):
         meta[key] = value.strip()
     return meta, body.strip() + '\n'
 
-def adapt(body):
+def adapt(body, ident="training-error-sop"):
     # Only the internal reference bullet is omitted; never rewrite technical prose.
     lines = [line for line in body.splitlines() if not line.startswith('- [工作总结中的诊断能力](')]
     body = '\n'.join(lines) + '\n'
-    names = {name: ident + '.html' for ident, name, _ in DOCS}
+    source_dir = DOC_PATHS[ident].parent.as_posix()
+    paths = {path.as_posix(): key + '.html' for key,path in DOC_PATHS.items()}
+    private_names = {'学习记录与待补充.md', '训练慢排查讨论记录.md', '文档维护记录.md'}
     def link(match):
         label, dest = match.groups()
         dest = unquote(dest)
-        if dest in names: return f'[{label}]({names[dest]})'
+        if dest in private_names: return f'{label}（未公开）'
+        resolved = posixpath.normpath(posixpath.join(source_dir, dest))
+        if resolved in paths: return f'[{label}]({paths[resolved]})'
         if dest.startswith('配图/') and dest.removeprefix('配图/') in IMAGES: return match.group(0)
         if dest == '../../../README.md': return f'[{label}](index.html)'
-        if dest == '学习记录与待补充.md': return f'{label}（未公开）'
         url = urlsplit(dest)
         if allowed_external(dest):
             return match.group(0)
-        raise ValueError('存在未审核的链接目标；请先审查适配规则')
+        raise ValueError(f'存在未审核的链接目标：{dest}')
     body = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', link, body)
     if any(x in body for x in ['30_工作与项目', '工作总结.md', '/Users/', 'file://']):
         raise ValueError('正文存在内部路径')
@@ -174,10 +184,13 @@ def search_index(pages):
     return result
 
 def shell(title, content, active='', toc=None, preview=False):
-    nav = ''.join(f'<a {"aria-current=page" if active == ident else ""} href="{ident}.html"><span>0{i+1}</span>{kind}</a>' for i,(ident,_,kind) in enumerate(DOCS))
+    nav = ''
+    for i,(ident,_,kind) in enumerate(DOCS):
+        if i in (0,3): nav += f'<p class="nav-title">{"训练报错排查" if i == 0 else "训练慢与变慢排查"}</p>'
+        nav += f'<a {"aria-current=page" if active == ident else ""} href="{ident}.html"><span>0{i+1}</span>{kind}</a>'
     aside = ''.join(f'<a class="{level}" href="#{anchor}">{html.escape(label)}</a>' for anchor,label,level in (toc or []))
     notice = '<div class="preview">本地预览 · 非线上发布版本</div>' if preview else ''
-    return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="{'noindex,nofollow' if preview else 'index,follow'}"><title>{html.escape(title)} · AI Infra 手记</title><link rel="stylesheet" href="assets/阅读.css"><script src="assets/搜索索引.js" defer></script><script src="assets/阅读.js" defer></script></head><body>{notice}<a class="skip" href="#main">跳至正文</a><header><a class="brand" href="index.html"><b>AI<span>/</span>Infra</b><small>工程实践手记</small></a><div class="header-tools"><button class="search-open" type="button" aria-haspopup="dialog">搜索 <kbd>/</kbd></button><a href="index.html#topics">知识导航 ↗</a></div></header><dialog id="search-dialog" aria-labelledby="search-title"><div class="search-top"><h2 id="search-title">搜索文章</h2><button class="search-close" type="button" aria-label="关闭搜索">关闭 ×</button></div><label for="search-input">输入关键词，查找标题与正文</label><input id="search-input" type="search" placeholder="如：GPU Hang、堆栈、采样" autocomplete="off"><p id="search-status" role="status" aria-live="polite">输入关键词开始搜索</p><ul id="search-results"></ul></dialog><div class="layout"><nav class="sidebar" aria-label="专题导航"><p class="eyebrow">知识体系 / 01</p><a class="category" href="index.html#topics">稳定性与排障</a><p class="nav-title">训练报错排查</p>{nav}<div class="side-note">从现象出发，沿证据定位。<br>保留经验的适用边界。</div></nav><main id="main">{content}</main><aside class="toc"><p class="eyebrow">本页目录</p>{aside}<a class="backtop" href="#main">回到顶部 ↑</a></aside></div><footer>AI Infra 手记 <span>持续学习 · 审慎验证 · 逐步沉淀</span></footer></body></html>'''
+    return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="{'noindex,nofollow' if preview else 'index,follow'}"><title>{html.escape(title)} · AI Infra 手记</title><link rel="stylesheet" href="assets/阅读.css"><script src="assets/搜索索引.js" defer></script><script src="assets/阅读.js" defer></script></head><body>{notice}<a class="skip" href="#main">跳至正文</a><header><a class="brand" href="index.html"><b>AI<span>/</span>Infra</b><small>工程实践手记</small></a><div class="header-tools"><button class="search-open" type="button" aria-haspopup="dialog">搜索 <kbd>/</kbd></button><a href="index.html#topics">知识导航 ↗</a></div></header><dialog id="search-dialog" aria-labelledby="search-title"><div class="search-top"><h2 id="search-title">搜索文章</h2><button class="search-close" type="button" aria-label="关闭搜索">关闭 ×</button></div><label for="search-input">输入关键词，查找标题与正文</label><input id="search-input" type="search" placeholder="如：GPU Hang、堆栈、采样" autocomplete="off"><p id="search-status" role="status" aria-live="polite">输入关键词开始搜索</p><ul id="search-results"></ul></dialog><div class="layout"><nav class="sidebar" aria-label="专题导航"><p class="eyebrow">知识体系 / 01</p><a class="category" href="index.html#topics">稳定性与排障</a>{nav}<div class="side-note">从现象出发，沿证据定位。<br>保留经验的适用边界。</div></nav><main id="main">{content}</main><aside class="toc"><p class="eyebrow">本页目录</p>{aside}<a class="backtop" href="#main">回到顶部 ↑</a></aside></div><footer>AI Infra 手记 <span>持续学习 · 审慎验证 · 逐步沉淀</span></footer></body></html>'''
 
 def build(pages, output, preview, images):
     # Render everything before replacing output: a validation failure preserves the last preview.
@@ -192,7 +205,7 @@ def build(pages, output, preview, images):
         mobile_toc = '<details class=mobile-toc><summary>本页目录</summary>' + ''.join(f'<a href="#{a}">{html.escape(t)}</a>' for a,t,_ in toc) + '</details>'
         rendered[ident+'.html'] = shell(data['title'], intro+mobile_toc+'<article>'+markup+'</article>'+end, ident, toc, preview)
         cards.append(f'<a class="card" href="{ident}.html"><span class="tag">{kind}</span><h3>{html.escape(data["title"])}</h3><p>{SUMMARIES[ident]}</p><span class="card-end">开始阅读 <b>↗</b></span></a>')
-    home = '<section class="hero"><p class="eyebrow">AI INFRA / FIELD NOTES</p><h1>把问题拆开，<br>把系统看清。</h1><p class="lead">围绕真实工程问题，整理 AI 基础设施的排查路径、判断依据与实践边界。</p><a class="primary" href="training-error-sop.html">从训练报错排查开始 →</a><div class="hero-stats"><span><b>01</b> 已有专题</span><span><b>03</b> 阅读入口</span><span>从快速操作到机制理解</span></div></section><section id="topics"><p class="eyebrow">当前专题</p><h2>稳定性与排障</h2><p class="muted">先找到调查入口，再沿证据深入。</p><div class="cards">'+''.join(cards)+'</div></section><section class="direction"><p class="eyebrow">学习方向</p><h2>按问题生长的知识体系</h2><p>稳定性与排障、可观测性与软硬件监控是独立的重点方向。其余主题随实际内容逐步建立。</p><div class="chips">'+''.join('<span>'+x+'</span>' for x in ['可观测性与软硬件监控','计算与系统基础','模型计算与执行','训练系统与效率','推理系统','数据与存储','平台与工程'])+'</div></section>'
+    home = '<section class="hero"><p class="eyebrow">AI INFRA / FIELD NOTES</p><h1>把问题拆开，<br>把系统看清。</h1><p class="lead">围绕真实工程问题，整理 AI 基础设施的排查路径、判断依据与实践边界。</p><a class="primary" href="training-error-sop.html">从训练报错排查开始 →</a><div class="hero-stats"><span><b>02</b> 已有专题</span><span><b>05</b> 阅读入口</span><span>从快速操作到机制理解</span></div></section><section id="topics"><p class="eyebrow">当前专题</p><h2>稳定性与排障</h2><p class="muted">先找到调查入口，再沿证据深入。</p><div class="cards"><h3 class="group-heading">训练报错排查</h3>'+''.join(cards[:3])+'<h3 class="group-heading">训练慢与变慢排查</h3>'+''.join(cards[3:])+'</div></section><section class="direction"><p class="eyebrow">学习方向</p><h2>按问题生长的知识体系</h2><p>稳定性与排障、可观测性与软硬件监控是独立的重点方向。其余主题随实际内容逐步建立。</p><div class="chips">'+''.join('<span>'+x+'</span>' for x in ['可观测性与软硬件监控','计算与系统基础','模型计算与执行','训练系统与效率','推理系统','数据与存储','平台与工程'])+'</div></section>'
     rendered['index.html'] = shell('首页',home,preview=preview)
     rendered['404.html'] = shell('页面不存在','<h1>这篇内容尚未到来。</h1><p>请通过顶部导航返回首页。</p>',preview=preview)
     if output.exists(): shutil.rmtree(output)
@@ -208,10 +221,10 @@ def build(pages, output, preview, images):
 def source_pages(source):
     pages={}
     for ident,name,kind in DOCS:
-        raw=(source/TOPIC/name).read_text()
+        raw=(source/DOC_PATHS[ident]).read_text()
         meta,body=parse(raw)
         if meta['id'] != ident: raise ValueError('文档标识发生变化')
-        pages[ident]={'title':meta['title'],'updated':meta['updated'],'body':adapt(body),'source_sha256':digest(raw),'status':meta['status'],'visibility':meta['visibility'],'publication_approval':meta.get('publication_approval',''),'publication_scope':meta.get('publication_scope',''),'deployment_status':meta.get('deployment_status','not_published')}
+        pages[ident]={'title':meta['title'],'updated':meta['updated'],'body':adapt(body,ident),'source_sha256':digest(raw),'status':meta['status'],'visibility':meta['visibility'],'publication_approval':meta.get('publication_approval',''),'publication_scope':meta.get('publication_scope',''),'deployment_status':meta.get('deployment_status','not_published')}
     return pages
 
 def check_approval(config,pages):

@@ -29,6 +29,11 @@ class PublicationTests(unittest.TestCase):
         rendered,_=blog.render('<script>alert(1)</script>\n\n```python\nprint("hello")\n```')
         self.assertNotIn('<script>',rendered);self.assertIn('&lt;script&gt;',rendered)
         self.assertIn('language-python',rendered);self.assertIn('hello',rendered)
+    def test_cross_topic_links_and_private_notes(self):
+        adapted=blog.adapt('[GPU Hang](../训练报错排查/训练卡住排查：通信等待型GPU_Hang.md) · [学习记录](训练慢排查讨论记录.md)', 'training-slow-explanation')
+        self.assertIn('training-hang-communication.html',adapted)
+        self.assertNotIn('训练慢排查讨论记录.md',adapted)
+        with self.assertRaises(ValueError):blog.adapt('[维护](../../../文档维护记录.md)', 'training-slow-sop')
     def test_mermaid_is_a_diagram_and_unknown_syntax_fails(self):
         diagram="""flowchart TD
 A{"日志？"}
