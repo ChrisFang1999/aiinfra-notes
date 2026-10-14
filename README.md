@@ -20,7 +20,7 @@ python3 -m http.server 8765 --bind 127.0.0.1 --directory 本地预览
 
 采用 Markdown → 静态 HTML → GitHub Pages，Python 只在构建时运行。当前五篇文章不需要前端应用框架；固定版本的 Markdown 渲染器支持表格、代码高亮；SOP 的 Mermaid 流程图在构建时生成静态 SVG，原生 JS 提供复制与目录定位。页面使用相对资源链接，兼容个人站点根路径与项目站点子路径。
 
-与文档框架相比，该方案依赖少、发布白名单清晰，但全文搜索、复杂内容集合等需要后续增加。随内容增长可迁移至成熟静态文档框架；正文 Markdown、稳定文档 id 与发布审核规则继续保留。
+与文档框架相比，该方案依赖少、发布白名单清晰，当前搜索在浏览器端处理；更复杂的内容集合和跨设备学习数据需要后续设计。随内容增长可迁移至成熟静态文档框架；正文 Markdown、稳定文档 id 与发布审核规则继续保留。
 
 GitHub Pages 支持由自定义 Actions 构建并上传静态产物：[官方说明](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)。本站按此配置，未使用其他托管服务。
 
