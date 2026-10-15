@@ -14,7 +14,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, Dataset, DistributedSampler
 
 
-class 教学数据集(Dataset):
+class SyntheticDataset(Dataset):
     """按索引生成确定性样本，不依赖下载；不是存储性能测试。"""
     def __init__(self, size):
         self.size = size
@@ -29,18 +29,18 @@ class 教学数据集(Dataset):
         return features, label
 
 
-def 整理批次(samples):
+def collate_batch(samples):
     # 多进程加载时，此函数在接到该 batch 索引任务的 worker 中执行。
     features, labels = zip(*samples)
     return torch.stack(features), torch.tensor(labels, dtype=torch.long)
 
 
-def 初始化工作进程(worker_id):
+def seed_worker(worker_id):
     # PyTorch 已设置 worker 的 torch seed；为 Python 随机增强初始化种子。
     random.seed(torch.initial_seed() % (2**32))
 
 
-def 参数():
+def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cpu', action='store_true', help='CPU/Gloo 流程自检')
     parser.add_argument('--amp', choices=['off', 'fp16', 'bf16'], default='off')
@@ -59,7 +59,7 @@ def 参数():
 
 
 def main():
-    args = 参数()
+    args = parse_args()
     local_rank = int(os.environ['LOCAL_RANK'])
     if args.cpu:
         device, backend = torch.device('cpu'), 'gloo'
@@ -82,7 +82,7 @@ def main():
             print(f'通信验证通过：backend={backend}, world_size={world_size}', flush=True)
 
         torch.manual_seed(42)
-        dataset = 教学数据集(args.samples)
+        dataset = SyntheticDataset(args.samples)
         # 丢弃不能均分到 rank 的尾部，避免补齐重复；与 DataLoader.drop_last 不同。
         sampler = DistributedSampler(dataset, shuffle=True, seed=42, drop_last=True)
         loader_options = {}
@@ -91,7 +91,7 @@ def main():
                                   multiprocessing_context='spawn')
         loader = DataLoader(dataset, sampler=sampler, batch_size=args.batch_size,
                             drop_last=False, num_workers=args.workers,
-                            collate_fn=整理批次, worker_init_fn=初始化工作进程,
+                            collate_fn=collate_batch, worker_init_fn=seed_worker,
                             generator=torch.Generator().manual_seed(2026 + rank),
                             pin_memory=not args.cpu, **loader_options)
         if len(loader) == 0:
@@ -107,9 +107,9 @@ def main():
 
         # 使用公开 optimizer hook，区分 scaler.step 被调用与真正完成参数更新。
         update_state = {'count': 0}
-        def 记录更新(optimizer, hook_args, hook_kwargs):
+        def record_optimizer_step(optimizer, hook_args, hook_kwargs):
             update_state['count'] += 1
-        hook = optimizer.register_step_post_hook(记录更新)
+        hook = optimizer.register_step_post_hook(record_optimizer_step)
         micro_step = 0
         for epoch in range(args.epochs):
             model.train()

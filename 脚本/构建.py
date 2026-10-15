@@ -276,8 +276,8 @@ def check_approval(config,pages):
     if set(config.get('approved',{})) != {d[0] for d in DOCS}: raise ValueError('公开批准清单不完整')
     for ident,data in pages.items():
         approved=config['approved'].get(ident,{})
-        explicit_ddp_approval = ident == 'ddp-training-principles' and approved.get('approval_basis') == 'user_authorized_2026-10-15' and data.get('publication_approval') == 'pending'
-        if data['visibility'] != 'public' or not (data.get('publication_approval') == 'approved' or explicit_ddp_approval) or (data.get('publication_scope') != 'adapted_body_only' and not explicit_ddp_approval):
+        allowed_scope = 'body_images_example_code' if ident == 'ddp-training-principles' else 'adapted_body_only'
+        if data['visibility'] != 'public' or data.get('publication_approval') != 'approved' or data.get('publication_scope') != allowed_scope:
             raise ValueError('内容未取得适配正文的公开资格')
         if approved.get('source_sha256') != data['source_sha256'] or approved.get('body_sha256') != digest(data['body']):
             raise ValueError('内容版本与批准记录不符，需重新审查')

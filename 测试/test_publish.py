@@ -5,6 +5,7 @@ blog=importlib.util.module_from_spec(spec);spec.loader.exec_module(blog)
 class PublicationTests(unittest.TestCase):
     def setUp(self):
         self.pages={ident:{'body':'# 示例\n','source_sha256':'abc','status':'draft','visibility':'public','publication_approval':'approved','publication_scope':'adapted_body_only','deployment_status':'not_published'} for ident,_,_ in blog.DOCS}
+        self.pages['ddp-training-principles']['publication_scope']='body_images_example_code'
         self.config={'enabled':True,'repository':'example/example.github.io','approved':{ident:{'source_sha256':'abc','body_sha256':blog.digest(d['body'])} for ident,d in self.pages.items()}}
     def test_unapproved_default(self):
         with self.assertRaises(ValueError):blog.check_approval({'enabled':False},self.pages)
@@ -58,12 +59,14 @@ E -- 无 --> G["查其他"]
         self.assertIn('每 30 秒采样',text)
         for excluded in ['PRIVATE_SENTINEL','internal.md','学习记录与待补充.md']:
             self.assertNotIn(excluded,text)
-    def test_ddp_pending_requires_explicit_version_approval(self):
+    def test_ddp_requires_approved_scope_and_version(self):
         pages=copy.deepcopy(self.pages)
         pages['ddp-training-principles']['publication_approval']='pending'
-        pages['ddp-training-principles']['publication_scope']=''
         with self.assertRaises(ValueError): blog.check_approval(self.config,pages)
-        self.config['approved']['ddp-training-principles']['approval_basis']='user_authorized_2026-10-15'
+        pages['ddp-training-principles']['publication_approval']='approved'
+        pages['ddp-training-principles']['publication_scope']='adapted_body_only'
+        with self.assertRaises(ValueError): blog.check_approval(self.config,pages)
+        pages['ddp-training-principles']['publication_scope']='body_images_example_code'
         blog.check_approval(self.config,pages)
         pages['ddp-training-principles']['body']+='changed'
         with self.assertRaises(ValueError): blog.check_approval(self.config,pages)
