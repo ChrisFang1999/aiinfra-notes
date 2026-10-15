@@ -1,5 +1,5 @@
 {
   "provider": "umami_cloud",
-  "enabled": false,
-  "website_id": null
+  "enabled": true,
+  "website_id": "8d67a087-4699-41f7-a530-b497441dd7a2"
 }
