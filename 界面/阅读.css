@@ -12,3 +12,4 @@ article img{display:block;max-width:100%;height:auto;margin:26px auto;border:1px
 .sidebar .nav-title{margin-top:25px;margin-bottom:5px}.sidebar .nav-title:first-of-type{margin-top:20px}@media(max-width:720px){.sidebar .nav-title{display:block;width:100%;font-size:11px;margin:10px 0 0}}
 .article-details{margin:26px 0;padding:16px 20px;border:1px solid var(--line);border-radius:6px;background:#f4f7f2}.article-details summary{cursor:pointer;font-weight:600;color:var(--accent)}.article-details[open] summary{margin-bottom:14px}.article-details p:last-child,.article-details ul:last-child{margin-bottom:0}
 .topic-section{padding-top:48px}.topic-section .cards{max-width:600px}
+.diagram-original{display:block;max-width:100%;text-align:center;text-decoration:none}.diagram-original img{max-width:100%}.diagram-original span{display:inline-block;margin-top:-12px;font-size:13px;color:var(--accent)}.diagram-original:hover span{text-decoration:underline}

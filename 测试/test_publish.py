@@ -77,4 +77,10 @@ E -- 无 --> G["查其他"]
         self.assertIn('<details class="article-details">',markup)
         self.assertIn('<strong>重要内容</strong>',markup)
         with self.assertRaises(ValueError): blog.render('<details onclick="alert(1)">x</details>','ddp-training-principles')
+    def test_ring_diagram_opens_original(self):
+        body='![Ring AllReduce](ddp配图/11_Ring_AllReduce分步图.png)'
+        markup,_=blog.render(body,'ddp-training-principles')
+        self.assertIn('class="diagram-original"',markup)
+        self.assertIn('打开原图放大查看',markup)
+        self.assertEqual(markup.count('<img '),1)
 if __name__=='__main__':unittest.main()

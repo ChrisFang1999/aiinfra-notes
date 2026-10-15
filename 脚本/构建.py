@@ -197,6 +197,13 @@ def render(body, ident=''):
                         raise ValueError(f'渲染层发现未经审核的链接：{href}')
                     if href == '下载/DDP训练示例.py': child.attrSet('download', 'DDP训练示例.py')
     markup = md.renderer.render(tokens, md.options, {})
+    if ident == 'ddp-training-principles' and '11_Ring_AllReduce分步图.png' in body:
+        def original_diagram(match):
+            tag = match.group(0)
+            src = match.group(1)
+            return f'<a class="diagram-original" href="{src}" target="_blank" rel="noopener" aria-label="打开 Ring AllReduce 原图">{tag}<span>打开原图放大查看 ↗</span></a>'
+        markup, count = re.subn(r'<img\s+[^>]*src="([^"]*11_Ring_AllReduce[^"]*\.png)"[^>]*>', original_diagram, markup)
+        if count != 1: raise ValueError('Ring AllReduce 图的原图链接未生成')
     for i, disclosure_html in enumerate(disclosures):
         markup = markup.replace(f'<p>BLOG_DISCLOSURE_{i}</p>', disclosure_html)
     return markup, toc

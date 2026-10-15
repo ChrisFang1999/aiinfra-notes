@@ -23,8 +23,8 @@
       "body_sha256": "e740ae08ea5caccb5f565ce43b9873cca6845e0d1247cd115aee651a3d1ba6ae"
     },
     "ddp-training-principles": {
-      "source_sha256": "e830a01a5a7f7ddcba0bacc3d3118fc8f348ac9df19b0ff6872fd95c8b35f05b",
-      "body_sha256": "08751ba81144e4c0e2c497a9fcca40bb9064530a9052fb12b7c7d674a1d5cef4"
+      "source_sha256": "aea611368f8e3b69ab044e1990957e129011f989e601ef65e6b78b3606a4e13f",
+      "body_sha256": "438c044bab1f6e423589d39a1152ee034fc994df263ad01a272f8468027af85b"
     }
   },
   "approved_assets": {
@@ -42,7 +42,7 @@
     "ddp配图/08_各rank计算与参数更新图.png": "85f9593374cb6599eeed7825ba8fe9ee94d6e2a0f807308a0ec509438832adf7",
     "ddp配图/09_bucket划分与梯度就绪图.png": "18d341b2ca72f5c0665e4947a1be00cedb78e25ca77548a992f8f5cb9c2d6450",
     "ddp配图/10_计算通信重叠时间线.png": "2497074d0d3e86e90f21188969d36069a2a18b43812668b0931f79ce9ef191b3",
-    "ddp配图/11_Ring_AllReduce分步图.png": "39e2f09569e75a2e0fd274d35a9ffc5c8fcb49ac9cbd2f8718729aff6601008a",
+    "ddp配图/11_Ring_AllReduce分步图.png": "746a94e872c70469bdcadf3ee5ac94f0961be3fe2ccd7a21c1464d442904a3ef",
     "ddp配图/12_梯度累计与no_sync时间线.png": "f86378c4d813bfea92714565394848e328c37e1d0a887b0fb62a0583466f983b",
     "ddp配图/13_AMP与参数更新顺序图.png": "fb193984cdddc7d207353aff7e64315098b7e611f26d7e659336709eff94242d",
     "ddp配图/14_慢rank与通信不匹配对照图.png": "3e3f0f5541be385b1faa46d66e3c6571ff40142a33bfdaed513d5738c647c980",
