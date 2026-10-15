@@ -11,13 +11,16 @@ from pygments.formatters import HtmlFormatter
 ROOT = Path(__file__).resolve().parents[1]
 TOPIC = Path('知识体系/稳定性与排障/训练报错排查')
 SLOW_TOPIC = Path('知识体系/稳定性与排障/训练慢与变慢排查')
+DDP_TOPIC = Path('知识体系/训练系统与效率/DDP分布式训练')
 IMAGES = ('GPU通信等待利用率原理示意图.png', 'GPU利用率与SM活跃率统计原理示意图.png')
+DDP_IMAGES = ('01_DDP训练全流程图.png', '02_单机与双机进程结构图.png', '03_分布式初始化与通信验证图.png', '04_模型状态与同步范围图.png', '05_样本索引分配图.png', '06_单rank数据加载链路图.png', '07_数据预取与消费时间线.png', '08_各rank计算与参数更新图.png', '09_bucket划分与梯度就绪图.png', '10_计算通信重叠时间线.png', '11_Ring_AllReduce分步图.png', '12_梯度累计与no_sync时间线.png', '13_AMP与参数更新顺序图.png', '14_慢rank与通信不匹配对照图.png')
 DOCS = [('training-error-sop', '训练报错排查SOP.md', '快速 SOP'),
         ('training-error-explanation', '训练报错排查详细解释.md', '深入解释'),
         ('training-hang-communication', '训练卡住排查：通信等待型GPU_Hang.md', 'GPU Hang 专题'),
         ('training-slow-sop', '训练慢与变慢排查SOP.md', '训练慢 SOP'),
-        ('training-slow-explanation', '训练慢与变慢排查详细解释.md', '训练慢详解')]
-DOC_PATHS = {ident: (SLOW_TOPIC if ident.startswith('training-slow-') else TOPIC) / name for ident,name,_ in DOCS}
+        ('training-slow-explanation', '训练慢与变慢排查详细解释.md', '训练慢详解'),
+        ('ddp-training-principles', 'DDP分布式训练：从启动到参数更新.md', 'DDP 原理与实战')]
+DOC_PATHS = {ident: (DDP_TOPIC if ident.startswith('ddp-') else SLOW_TOPIC if ident.startswith('training-slow-') else TOPIC) / name for ident,name,_ in DOCS}
 EXTERNAL = {'pytorch.org', 'docs.pytorch.org', 'docs.nvidia.com', 'kubernetes.io', 'numpy.org', 'deepspeed.readthedocs.io'}
 EXTERNAL_URLS = {
     'https://github.com/NVIDIA/nccl/blob/master/src/device/prims_simple.h',
@@ -31,6 +34,7 @@ SUMMARIES = {
     'training-hang-communication': '从通信等待机制出发，串联 GPU Hang 的排查流程、原因分支与恢复验证。',
     'training-slow-sop': '以 step time 和跨 rank 差异为入口，快速定位数据、CPU、GPU 与通信问题。',
     'training-slow-explanation': '展开基准比较、数据等待、Profile 时间线及验证边界。',
+    'ddp-training-principles': '从 torchrun 启动到梯度同步和参数更新，结合流程图与可运行示例理解 DDP。',
 }
 
 def allowed_external(url):
@@ -65,7 +69,11 @@ def adapt(body, ident="training-error-sop"):
         if dest in private_names: return f'{label}（未公开）'
         resolved = posixpath.normpath(posixpath.join(source_dir, dest))
         if resolved in paths: return f'[{label}]({paths[resolved]})'
+        if dest.startswith('#') and ident.startswith('ddp-'): return match.group(0)
         if dest.startswith('配图/') and dest.removeprefix('配图/') in IMAGES: return match.group(0)
+        if ident.startswith('ddp-') and dest.startswith('配图/') and dest.removeprefix('配图/') in DDP_IMAGES:
+            return f'[{label}](ddp配图/{dest.removeprefix("配图/")})'
+        if ident.startswith('ddp-') and dest == 'DDP训练示例.py': return f'[{label}](下载/DDP训练示例.py)'
         if dest == '../../../README.md': return f'[{label}](index.html)'
         url = urlsplit(dest)
         if allowed_external(dest):
@@ -139,7 +147,31 @@ def image_hashes(directory):
         result[name] = hashlib.sha256(path.read_bytes()).hexdigest()
     return result
 
-def render(body):
+def ddp_asset_hashes(directory):
+    result = {}
+    for name in DDP_IMAGES:
+        path = directory / 'ddp配图' / name
+        if not path.is_file() or path.stat().st_size > 5_000_000 or path.read_bytes()[:8] != b'\x89PNG\r\n\x1a\n':
+            raise ValueError('缺少获准 DDP PNG 或图片格式不符')
+        result['ddp配图/' + name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    code = directory / '下载/DDP训练示例.py'
+    if not code.is_file() or code.stat().st_size > 100_000:
+        raise ValueError('缺少获准 DDP 示例代码')
+    result['下载/DDP训练示例.py'] = hashlib.sha256(code.read_bytes()).hexdigest()
+    return result
+
+def render(body, ident=''):
+    disclosures = []
+    if ident == 'ddp-training-principles':
+        def disclosure(match):
+            summary, content = match.groups()
+            if '<' in summary or '>' in summary or '<details' in content or '<summary' in content:
+                raise ValueError('折叠内容格式未经审核')
+            inner, _ = render(content.strip(), ident)
+            disclosures.append(f'<details class="article-details"><summary>{html.escape(summary)}</summary>{inner}</details>')
+            return f'\n\nBLOG_DISCLOSURE_{len(disclosures)-1}\n\n'
+        body = re.sub(r'<details>\s*<summary>([^\n<>]+)</summary>\s*(.*?)\s*</details>', disclosure, body, flags=re.S)
+        if '<details' in body or '<summary' in body: raise ValueError('折叠内容格式未经审核')
     md = MarkdownIt('commonmark', {'html':False, 'highlight':code_highlight}).enable('table')
     tokens = md.parse(body)
     for token in tokens:
@@ -151,19 +183,23 @@ def render(body):
     for i, token in enumerate(tokens):
         if token.type == 'heading_open':
             n += 1
-            anchor = f'section-{n}'
+            anchor = re.sub(r'[^\w\s-]', '', tokens[i+1].content.lower()).strip().replace(' ', '-') if ident == 'ddp-training-principles' else f'section-{n}'
             token.attrSet('id', anchor)
             if token.tag != 'h1': toc.append((anchor, tokens[i+1].content, token.tag))
         if token.type == 'inline':
             for child in token.children or []:
-                if child.type == 'image' and unquote(child.attrGet('src') or '') not in {'配图/' + x for x in IMAGES}: raise ValueError('图片尚未经过公开审查')
+                if child.type == 'image' and unquote(child.attrGet('src') or '') not in ({'配图/' + x for x in IMAGES} | {'ddp配图/' + x for x in DDP_IMAGES}): raise ValueError('图片尚未经过公开审查')
                 if child.type == 'link_open':
-                    href = child.attrGet('href') or ''
-                    allowed = {'index.html'} | {x[0]+'.html' for x in DOCS}
+                    href = unquote(child.attrGet('href') or '')
+                    allowed = {'index.html', '下载/DDP训练示例.py'} | {x[0]+'.html' for x in DOCS}
                     u = urlsplit(href)
                     if not (href in allowed or href.startswith('#') or allowed_external(href)):
-                        raise ValueError('渲染层发现未经审核的链接')
-    return md.renderer.render(tokens, md.options, {}), toc
+                        raise ValueError(f'渲染层发现未经审核的链接：{href}')
+                    if href == '下载/DDP训练示例.py': child.attrSet('download', 'DDP训练示例.py')
+    markup = md.renderer.render(tokens, md.options, {})
+    for i, disclosure_html in enumerate(disclosures):
+        markup = markup.replace(f'<p>BLOG_DISCLOSURE_{i}</p>', disclosure_html)
+    return markup, toc
 
 class SearchText(HTMLParser):
     def __init__(self):
@@ -176,7 +212,7 @@ def search_index(pages):
     result = []
     for ident, _, _ in DOCS:
         data = pages[ident]
-        markup, _ = render(data['body'])
+        markup, _ = render(data['body'], ident)
         parser = SearchText()
         parser.feed(markup)
         result.append({'title': data['title'], 'url': ident + '.html',
@@ -186,7 +222,8 @@ def search_index(pages):
 def shell(title, content, active='', toc=None, preview=False):
     nav = ''
     for i,(ident,_,kind) in enumerate(DOCS):
-        if i in (0,3): nav += f'<p class="nav-title">{"训练报错排查" if i == 0 else "训练慢与变慢排查"}</p>'
+        if i == 5: nav += '<a class="category" href="index.html#ddp-topic">训练系统与效率</a>'
+        if i in (0,3,5): nav += f'<p class="nav-title">{"训练报错排查" if i == 0 else "训练慢与变慢排查" if i == 3 else "DDP 分布式训练"}</p>'
         nav += f'<a {"aria-current=page" if active == ident else ""} href="{ident}.html"><span>0{i+1}</span>{kind}</a>'
     aside = ''.join(f'<a class="{level}" href="#{anchor}">{html.escape(label)}</a>' for anchor,label,level in (toc or []))
     notice = '<div class="preview">本地预览 · 非线上发布版本</div>' if preview else ''
@@ -199,13 +236,14 @@ def build(pages, output, preview, images):
     cards = []
     for ident,name,kind in DOCS:
         data = pages[ident]
-        markup,toc = render(data['body'])
-        intro = f'<div class="article-meta">稳定性与排障 <span> / {kind} · 更新 {html.escape(data["updated"])}</span></div>'
+        markup,toc = render(data['body'], ident)
+        category = '训练系统与效率' if ident.startswith('ddp-') else '稳定性与排障'
+        intro = f'<div class="article-meta">{category} <span> / {kind} · 更新 {html.escape(data["updated"])}</span></div>'
         end = '<div class="related">' + ''.join(f'<a class="next" href="{other[0]}.html"><small>继续阅读</small><strong>{other[2]} →</strong></a>' for other in DOCS if other[0] != ident) + '</div>'
         mobile_toc = '<details class=mobile-toc><summary>本页目录</summary>' + ''.join(f'<a href="#{a}">{html.escape(t)}</a>' for a,t,_ in toc) + '</details>'
         rendered[ident+'.html'] = shell(data['title'], intro+mobile_toc+'<article>'+markup+'</article>'+end, ident, toc, preview)
         cards.append(f'<a class="card" href="{ident}.html"><span class="tag">{kind}</span><h3>{html.escape(data["title"])}</h3><p>{SUMMARIES[ident]}</p><span class="card-end">开始阅读 <b>↗</b></span></a>')
-    home = '<section class="hero"><p class="eyebrow">AI INFRA / FIELD NOTES</p><h1>把问题拆开，<br>把系统看清。</h1><p class="lead">围绕真实工程问题，整理 AI 基础设施的排查路径、判断依据与实践边界。</p><a class="primary" href="training-error-sop.html">从训练报错排查开始 →</a><div class="hero-stats"><span><b>02</b> 已有专题</span><span><b>05</b> 阅读入口</span><span>从快速操作到机制理解</span></div></section><section id="topics"><p class="eyebrow">当前专题</p><h2>稳定性与排障</h2><p class="muted">先找到调查入口，再沿证据深入。</p><div class="cards"><h3 class="group-heading">训练报错排查</h3>'+''.join(cards[:3])+'<h3 class="group-heading">训练慢与变慢排查</h3>'+''.join(cards[3:])+'</div></section><section class="direction"><p class="eyebrow">学习方向</p><h2>按问题生长的知识体系</h2><p>稳定性与排障、可观测性与软硬件监控是独立的重点方向。其余主题随实际内容逐步建立。</p><div class="chips">'+''.join('<span>'+x+'</span>' for x in ['可观测性与软硬件监控','计算与系统基础','模型计算与执行','训练系统与效率','推理系统','数据与存储','平台与工程'])+'</div></section>'
+    home = '<section class="hero"><p class="eyebrow">AI INFRA / FIELD NOTES</p><h1>把问题拆开，<br>把系统看清。</h1><p class="lead">围绕真实工程问题，整理 AI 基础设施的排查路径、判断依据与实践边界。</p><a class="primary" href="training-error-sop.html">从训练报错排查开始 →</a><div class="hero-stats"><span><b>03</b> 已有专题</span><span><b>06</b> 阅读入口</span><span>从快速操作到机制理解</span></div></section><section id="topics"><p class="eyebrow">当前专题</p><h2>稳定性与排障</h2><p class="muted">先找到调查入口，再沿证据深入。</p><div class="cards"><h3 class="group-heading">训练报错排查</h3>'+''.join(cards[:3])+'<h3 class="group-heading">训练慢与变慢排查</h3>'+''.join(cards[3:5])+'</div></section><section id="ddp-topic" class="topic-section"><p class="eyebrow">新增专题</p><h2>训练系统与效率</h2><p class="muted">从启动、数据分配到梯度同步和参数更新。</p><div class="cards">'+''.join(cards[5:])+'</div></section><section class="direction"><p class="eyebrow">学习方向</p><h2>按问题生长的知识体系</h2><p>稳定性与排障、可观测性与软硬件监控是独立的重点方向。其余主题随实际内容逐步建立。</p><div class="chips">'+''.join('<span>'+x+'</span>' for x in ['可观测性与软硬件监控','计算与系统基础','模型计算与执行','训练系统与效率','推理系统','数据与存储','平台与工程'])+'</div></section>'
     rendered['index.html'] = shell('首页',home,preview=preview)
     rendered['404.html'] = shell('页面不存在','<h1>这篇内容尚未到来。</h1><p>请通过顶部导航返回首页。</p>',preview=preview)
     if output.exists(): shutil.rmtree(output)
@@ -214,13 +252,18 @@ def build(pages, output, preview, images):
     shutil.copytree(ROOT/'界面',output/'assets')
     (output/'配图').mkdir()
     for name in IMAGES: shutil.copy2(images/'配图'/name, output/'配图'/name)
+    (output/'ddp配图').mkdir()
+    for name in DDP_IMAGES: shutil.copy2(images/'ddp配图'/name, output/'ddp配图'/name)
+    (output/'下载').mkdir()
+    shutil.copy2(images/'下载/DDP训练示例.py', output/'下载/DDP训练示例.py')
     (output/'assets/搜索索引.js').write_text('window.blogSearchIndex = ' + json.dumps(index, ensure_ascii=False).replace('<', '\\u003c') + ';\n')
     with (output/'assets/阅读.css').open('a') as f: f.write(HtmlFormatter().get_style_defs('pre'))
     (output/'.nojekyll').touch()
 
-def source_pages(source):
+def source_pages(source, only=None):
     pages={}
     for ident,name,kind in DOCS:
+        if only and ident != only: continue
         raw=(source/DOC_PATHS[ident]).read_text()
         meta,body=parse(raw)
         if meta['id'] != ident: raise ValueError('文档标识发生变化')
@@ -232,9 +275,10 @@ def check_approval(config,pages):
         raise ValueError('尚未批准公开内容及目标仓库')
     if set(config.get('approved',{})) != {d[0] for d in DOCS}: raise ValueError('公开批准清单不完整')
     for ident,data in pages.items():
-        if data['visibility'] != 'public' or data.get('publication_approval') != 'approved' or data.get('publication_scope') != 'adapted_body_only':
-            raise ValueError('内容未取得适配正文的公开资格')
         approved=config['approved'].get(ident,{})
+        explicit_ddp_approval = ident == 'ddp-training-principles' and approved.get('approval_basis') == 'user_authorized_2026-10-15' and data.get('publication_approval') == 'pending'
+        if data['visibility'] != 'public' or not (data.get('publication_approval') == 'approved' or explicit_ddp_approval) or (data.get('publication_scope') != 'adapted_body_only' and not explicit_ddp_approval):
+            raise ValueError('内容未取得适配正文的公开资格')
         if approved.get('source_sha256') != data['source_sha256'] or approved.get('body_sha256') != digest(data['body']):
             raise ValueError('内容版本与批准记录不符，需重新审查')
 
@@ -242,27 +286,41 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument('mode',choices=['preview','export','public'])
     p.add_argument('--source',type=Path,default=os.environ.get('AI_INFRA_SOURCE'))
+    p.add_argument('--only',choices=[d[0] for d in DOCS])
     args=p.parse_args()
     config=json.loads((ROOT/'发布配置.json').read_text())
     if args.mode in ['preview','export']:
         if not args.source: p.error('请使用 --source 指定正式知识库路径')
-        pages=source_pages(Path(args.source))
+        pages=source_pages(Path(args.source), args.only)
         if args.mode == 'preview':
-            build(pages,ROOT/'本地预览',True,Path(args.source)/TOPIC)
+            pages = {ident: json.loads((ROOT/'发布内容'/(ident+'.json')).read_text()) for ident,_,_ in DOCS if ident not in pages} | pages
+            build(pages,ROOT/'本地预览',True,ROOT/'发布内容')
             report={ident:{'source_sha256':d['source_sha256'],'body_sha256':digest(d['body']),'status':d['status'],'visibility':d['visibility']} for ident,d in pages.items()}
             (ROOT/'本地记录').mkdir(exist_ok=True)
             (ROOT/'本地记录/版本核对.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
             print('本地预览已生成；不代表公开授权。')
             return
         check_approval(config,pages)
-        for data in pages.values(): render(data['body'])
-        asset_dir = Path(args.source)/TOPIC
-        if image_hashes(asset_dir) != config.get('approved_assets'): raise ValueError('图片版本与批准记录不符')
+        for ident,data in pages.items(): render(data['body'], ident)
         out=ROOT/'发布内容'
         out.mkdir(exist_ok=True)
         for ident,data in pages.items(): (out/(ident+'.json')).write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
-        (out/'配图').mkdir(exist_ok=True)
-        for name in IMAGES: shutil.copy2(asset_dir/'配图'/name, out/'配图'/name)
+        if not args.only or args.only == 'ddp-training-principles':
+            ddp_dir=Path(args.source)/DDP_TOPIC
+            staged=ROOT/'本地记录/DDP资源暂存'
+            (staged/'ddp配图').mkdir(parents=True,exist_ok=True)
+            (staged/'下载').mkdir(exist_ok=True)
+            for name in DDP_IMAGES: shutil.copy2(ddp_dir/'配图'/name, staged/'ddp配图'/name)
+            shutil.copy2(ddp_dir/'DDP训练示例.py', staged/'下载/DDP训练示例.py')
+            if ddp_asset_hashes(staged) != config.get('approved_ddp_assets'): raise ValueError('DDP 资源版本与批准记录不符')
+            shutil.copytree(staged/'ddp配图',out/'ddp配图',dirs_exist_ok=True)
+            shutil.copytree(staged/'下载',out/'下载',dirs_exist_ok=True)
+            shutil.rmtree(staged)
+        if not args.only:
+            asset_dir = Path(args.source)/TOPIC
+            if image_hashes(asset_dir) != config.get('approved_assets'): raise ValueError('图片版本与批准记录不符')
+            (out/'配图').mkdir(exist_ok=True)
+            for name in IMAGES: shutil.copy2(asset_dir/'配图'/name, out/'配图'/name)
         print('已生成获准版本副本；未推送、未部署。')
     else:
         if not config.get('enabled'): raise ValueError('尚未批准公开内容及目标仓库')
@@ -271,6 +329,7 @@ def main():
         repo=os.environ.get('GITHUB_REPOSITORY')
         if repo and repo != config['repository']: raise ValueError('当前仓库与批准目标不符')
         if image_hashes(ROOT/'发布内容') != config.get('approved_assets'): raise ValueError('发布图片与批准版本不符')
+        if ddp_asset_hashes(ROOT/'发布内容') != config.get('approved_ddp_assets'): raise ValueError('DDP 资源与批准版本不符')
         build(pages,ROOT/'发布站点',False,ROOT/'发布内容')
         print('公开静态站点已生成。')
 

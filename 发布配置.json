@@ -21,10 +21,32 @@
     "training-slow-explanation": {
       "source_sha256": "bc9c82cb815f4282f6fd40bd11068f0d972b681155342e500fcd99e427b612f6",
       "body_sha256": "e740ae08ea5caccb5f565ce43b9873cca6845e0d1247cd115aee651a3d1ba6ae"
+    },
+    "ddp-training-principles": {
+      "source_sha256": "37f52c3e42eb7d611b50a4ef7d41c005ccbd2adbaa3d912d724a63dd4d7725af",
+      "body_sha256": "52be848a2ce8428b72a7f0afe81b296437a62f4969f160d09aa641287eb82c0c",
+      "approval_basis": "user_authorized_2026-10-15"
     }
   },
   "approved_assets": {
     "GPU通信等待利用率原理示意图.png": "85d8fc370441567fd7b2d3dd474d20a19557897b78d38bb7294f47388321a933",
     "GPU利用率与SM活跃率统计原理示意图.png": "386cbd9a4ea1a6a0aecd53d47537f88b9810e6dac20e92eb1e2d158357d8e02c"
+  },
+  "approved_ddp_assets": {
+    "ddp配图/01_DDP训练全流程图.png": "d8e0222dc25c81b9fea9901e8b4e8e6ed3398e224804cb862ea64cd751b746c5",
+    "ddp配图/02_单机与双机进程结构图.png": "36aa71d0d6775c4a6ce250e0328bd5cc909f53131e457cd196ff10ad70bd7dce",
+    "ddp配图/03_分布式初始化与通信验证图.png": "c0d355a1a1e40f6caffd810ccc9bb468a0f63fa4d4e2d8317080dc3f0c0fb024",
+    "ddp配图/04_模型状态与同步范围图.png": "7f04e5b9f31370d4909561f57475af7cc58684fbaf2db7fdeb8227737c375541",
+    "ddp配图/05_样本索引分配图.png": "64b3649d5dcdbb501dc643672926abcb8b2aa6460f7c6b84b7774154d7a282c4",
+    "ddp配图/06_单rank数据加载链路图.png": "7a75de11c338ddcb05beef35564d47db6c28b13dd0d5403e8ce6d4d94872df58",
+    "ddp配图/07_数据预取与消费时间线.png": "04118e31047a38bc323ef3f56b49ed369a96335143137267406c2fcadbccb67d",
+    "ddp配图/08_各rank计算与参数更新图.png": "85f9593374cb6599eeed7825ba8fe9ee94d6e2a0f807308a0ec509438832adf7",
+    "ddp配图/09_bucket划分与梯度就绪图.png": "18d341b2ca72f5c0665e4947a1be00cedb78e25ca77548a992f8f5cb9c2d6450",
+    "ddp配图/10_计算通信重叠时间线.png": "2497074d0d3e86e90f21188969d36069a2a18b43812668b0931f79ce9ef191b3",
+    "ddp配图/11_Ring_AllReduce分步图.png": "39e2f09569e75a2e0fd274d35a9ffc5c8fcb49ac9cbd2f8718729aff6601008a",
+    "ddp配图/12_梯度累计与no_sync时间线.png": "f86378c4d813bfea92714565394848e328c37e1d0a887b0fb62a0583466f983b",
+    "ddp配图/13_AMP与参数更新顺序图.png": "fb193984cdddc7d207353aff7e64315098b7e611f26d7e659336709eff94242d",
+    "ddp配图/14_慢rank与通信不匹配对照图.png": "3e3f0f5541be385b1faa46d66e3c6571ff40142a33bfdaed513d5738c647c980",
+    "下载/DDP训练示例.py": "c65e984fd5bf999ecf606913ceabb697d5e86cd1bfbe01bf6873634d2e72a728"
   }
 }

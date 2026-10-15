@@ -58,4 +58,20 @@ E -- 无 --> G["查其他"]
         self.assertIn('每 30 秒采样',text)
         for excluded in ['PRIVATE_SENTINEL','internal.md','学习记录与待补充.md']:
             self.assertNotIn(excluded,text)
+    def test_ddp_pending_requires_explicit_version_approval(self):
+        pages=copy.deepcopy(self.pages)
+        pages['ddp-training-principles']['publication_approval']='pending'
+        pages['ddp-training-principles']['publication_scope']=''
+        with self.assertRaises(ValueError): blog.check_approval(self.config,pages)
+        self.config['approved']['ddp-training-principles']['approval_basis']='user_authorized_2026-10-15'
+        blog.check_approval(self.config,pages)
+        pages['ddp-training-principles']['body']+='changed'
+        with self.assertRaises(ValueError): blog.check_approval(self.config,pages)
+    def test_ddp_disclosure_and_anchors(self):
+        body='## 1. 从 torchrun 启动\n\n[跳转](#1-从-torchrun-启动)\n\n<details>\n<summary>原理说明</summary>\n\n**重要内容**\n\n</details>\n'
+        markup,_=blog.render(body,'ddp-training-principles')
+        self.assertIn('id="1-从-torchrun-启动"',markup)
+        self.assertIn('<details class="article-details">',markup)
+        self.assertIn('<strong>重要内容</strong>',markup)
+        with self.assertRaises(ValueError): blog.render('<details onclick="alert(1)">x</details>','ddp-training-principles')
 if __name__=='__main__':unittest.main()
