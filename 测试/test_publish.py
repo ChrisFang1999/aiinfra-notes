@@ -83,4 +83,14 @@ E -- 无 --> G["查其他"]
         self.assertIn('class="diagram-original"',markup)
         self.assertIn('打开原图放大查看',markup)
         self.assertEqual(markup.count('<img '),1)
+    def test_analytics_requires_valid_public_configuration(self):
+        config={'provider':'umami_cloud','enabled':True,'website_id':'94db1cb1-74f4-4a40-ad6c-962362670409'}
+        snippet=blog.analytics_snippet(config)
+        self.assertIn('https://cloud.umami.is/script.js',snippet)
+        self.assertIn('data-domains="chrisfang1999.github.io"',snippet)
+        self.assertIn('data-exclude-search="true"',snippet)
+        self.assertEqual(blog.analytics_snippet(config,preview=True),'')
+        self.assertEqual(blog.analytics_snippet({'enabled':False}),'')
+        config['website_id']='invalid" onload="alert(1)'
+        with self.assertRaises(ValueError):blog.analytics_snippet(config)
 if __name__=='__main__':unittest.main()

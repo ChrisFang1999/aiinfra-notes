@@ -1,0 +1,5 @@
+{
+  "provider": "umami_cloud",
+  "enabled": false,
+  "website_id": null
+}

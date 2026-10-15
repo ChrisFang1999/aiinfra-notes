@@ -226,6 +226,18 @@ def search_index(pages):
                        'text': re.sub(r'\s+', ' ', ' '.join(parser.parts)).strip()})
     return result
 
+def analytics_snippet(config, preview=False):
+    if preview or config.get('enabled') is not True:
+        return ''
+    if config.get('provider') != 'umami_cloud':
+        raise ValueError('未审核的统计服务')
+    website_id = config.get('website_id', '')
+    if not isinstance(website_id, str) or not re.fullmatch(r'[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}', website_id):
+        raise ValueError('Umami Website ID 缺失或格式错误')
+    return (f'<script defer src="https://cloud.umami.is/script.js" data-website-id="{website_id}" '
+            'data-domains="chrisfang1999.github.io" data-exclude-search="true" '
+            'data-exclude-hash="true" data-do-not-track="true"></script>')
+
 def shell(title, content, active='', toc=None, preview=False):
     nav = ''
     for i,(ident,_,kind) in enumerate(DOCS):
@@ -234,7 +246,8 @@ def shell(title, content, active='', toc=None, preview=False):
         nav += f'<a {"aria-current=page" if active == ident else ""} href="{ident}.html"><span>0{i+1}</span>{kind}</a>'
     aside = ''.join(f'<a class="{level}" href="#{anchor}">{html.escape(label)}</a>' for anchor,label,level in (toc or []))
     notice = '<div class="preview">本地预览 · 非线上发布版本</div>' if preview else ''
-    return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="{'noindex,nofollow' if preview else 'index,follow'}"><title>{html.escape(title)} · AI Infra 手记</title><link rel="stylesheet" href="assets/阅读.css"><script src="assets/搜索索引.js" defer></script><script src="assets/阅读.js" defer></script></head><body>{notice}<a class="skip" href="#main">跳至正文</a><header><a class="brand" href="index.html"><b>AI<span>/</span>Infra</b><small>工程实践手记</small></a><div class="header-tools"><button class="search-open" type="button" aria-haspopup="dialog">搜索 <kbd>/</kbd></button><a href="index.html#topics">知识导航 ↗</a></div></header><dialog id="search-dialog" aria-labelledby="search-title"><div class="search-top"><h2 id="search-title">搜索文章</h2><button class="search-close" type="button" aria-label="关闭搜索">关闭 ×</button></div><label for="search-input">输入关键词，查找标题与正文</label><input id="search-input" type="search" placeholder="如：GPU Hang、堆栈、采样" autocomplete="off"><p id="search-status" role="status" aria-live="polite">输入关键词开始搜索</p><ul id="search-results"></ul></dialog><div class="layout"><nav class="sidebar" aria-label="专题导航"><p class="eyebrow">知识体系 / 01</p><a class="category" href="index.html#topics">稳定性与排障</a>{nav}<div class="side-note">从现象出发，沿证据定位。<br>保留经验的适用边界。</div></nav><main id="main">{content}</main><aside class="toc"><p class="eyebrow">本页目录</p>{aside}<a class="backtop" href="#main">回到顶部 ↑</a></aside></div><footer>AI Infra 手记 <span>持续学习 · 审慎验证 · 逐步沉淀</span></footer></body></html>'''
+    analytics = analytics_snippet(json.loads((ROOT/'统计配置.json').read_text()), preview)
+    return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="{'noindex,nofollow' if preview else 'index,follow'}"><title>{html.escape(title)} · AI Infra 手记</title><link rel="stylesheet" href="assets/阅读.css"><script src="assets/搜索索引.js" defer></script><script src="assets/阅读.js" defer></script>{analytics}</head><body>{notice}<a class="skip" href="#main">跳至正文</a><header><a class="brand" href="index.html"><b>AI<span>/</span>Infra</b><small>工程实践手记</small></a><div class="header-tools"><button class="search-open" type="button" aria-haspopup="dialog">搜索 <kbd>/</kbd></button><a href="index.html#topics">知识导航 ↗</a></div></header><dialog id="search-dialog" aria-labelledby="search-title"><div class="search-top"><h2 id="search-title">搜索文章</h2><button class="search-close" type="button" aria-label="关闭搜索">关闭 ×</button></div><label for="search-input">输入关键词，查找标题与正文</label><input id="search-input" type="search" placeholder="如：GPU Hang、堆栈、采样" autocomplete="off"><p id="search-status" role="status" aria-live="polite">输入关键词开始搜索</p><ul id="search-results"></ul></dialog><div class="layout"><nav class="sidebar" aria-label="专题导航"><p class="eyebrow">知识体系 / 01</p><a class="category" href="index.html#topics">稳定性与排障</a>{nav}<div class="side-note">从现象出发，沿证据定位。<br>保留经验的适用边界。</div></nav><main id="main">{content}</main><aside class="toc"><p class="eyebrow">本页目录</p>{aside}<a class="backtop" href="#main">回到顶部 ↑</a></aside></div><footer>AI Infra 手记 <span>持续学习 · 审慎验证 · 逐步沉淀</span></footer></body></html>'''
 
 def build(pages, output, preview, images):
     # Render everything before replacing output: a validation failure preserves the last preview.
